@@ -17,7 +17,7 @@ def lambda_handler(event, context):
     why_im_best_candidate = [
         """Vikas is the best candidate for the LiteLLM Founding Backend Engineer because:\n
         - Most people work to live, he LIVES TO WORK\n
-        - He was promoted to a SENIOR level position ASAP because of his exceptional programming skills\n
+        - He was promoted to a SENIOR position ASAP because of his ability to architect backend APIs\n
         - He has already MENTORED 2 interns and 1 new associate\n
         """,
 

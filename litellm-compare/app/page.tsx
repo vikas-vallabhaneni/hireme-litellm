@@ -56,15 +56,13 @@ export default function Home() {
           cost: ((result as ModelResponse).cost || 0) * 1000
         }));
       setChartData(chart);
-      setLoading(false); // Stop loading immediately after getting data
+      setLoading(false);
       
       // Process responses with streaming animation (independently)
       Object.entries(data as Record<string, ModelResponse>).forEach(([model, result]) => {
         if (result.chunks && result.chunks.length > 0) {
-          // Animate streaming for models with chunks
           animateStreaming(model, result);
         } else {
-          // Set response immediately for non-chunked responses
           setResponses(prev => ({
             ...prev,
             [model]: result as ModelResponse
@@ -84,25 +82,22 @@ export default function Home() {
     
     setStreamingModels(prev => new Set(prev).add(model));
     
-    // Initialize with empty content but include metrics immediately
     setResponses(prev => ({
       ...prev,
       [model]: {
         ...result,
         displayContent: '',
         streaming: true,
-        // Keep all metrics available immediately
         latency: result.latency,
         tokens: result.tokens,
         cost: result.cost
       }
     }));
     
-    // Animate chunks appearing
     let currentChunk = 0;
     let currentText = '';
     const chunks = result.chunks;
-    const chunkDelay = Math.min(50, 2000 / chunks.length); // Adjust speed based on chunk count
+    const chunkDelay = Math.min(50, 2000 / chunks.length);
     
     const streamInterval = setInterval(() => {
       if (currentChunk < chunks.length) {
@@ -117,7 +112,6 @@ export default function Home() {
         }));
         currentChunk++;
       } else {
-        // Streaming complete
         clearInterval(streamInterval);
         setResponses(prev => ({
           ...prev,
@@ -211,7 +205,7 @@ export default function Home() {
     "What is an LLM Gateway?",
     "Write a haiku about AI.",
     "Why is Vikas the best candidate for the job?",
-    "What is the difference between httpx and aiohttp?"
+    "Name one fruit."
   ];
 
   const barColors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
@@ -230,24 +224,44 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
+    <div className="min-h-screen bg-[#0c0a14] relative overflow-hidden">
+      {/* Background Pattern - Leonardo.ai style geometric grid */}
+      <div className="absolute inset-0 opacity-[0.03]">
+        <div 
+          className="absolute inset-0"
+          style={{
+            backgroundImage: `
+              linear-gradient(rgba(147, 51, 234, 0.3) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(147, 51, 234, 0.3) 1px, transparent 1px)
+            `,
+            backgroundSize: '50px 50px',
+            backgroundPosition: '-1px -1px'
+          }}
+        />
+      </div>
+      
+      {/* Gradient Orbs */}
+      <div className="absolute top-0 -left-40 w-80 h-80 bg-purple-600/20 rounded-full filter blur-3xl" />
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-violet-600/10 rounded-full filter blur-3xl" />
+      
       {/* Hero Header */}
-      <header className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-800/20 to-pink-800/20 backdrop-blur-3xl" />
+      <header className="relative">
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
-              <Zap className="h-10 w-10 text-yellow-400" />
-              <h1 className="text-4xl sm:text-5xl font-bold text-white">
+              <div className="p-3 bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl">
+                <Zap className="h-8 w-8 text-white" />
+              </div>
+              <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-violet-400">
                 LiteLLM Comparison Tool
               </h1>
             </div>
-            <p className="text-xl text-purple-200 mb-6">
+            <p className="text-lg text-gray-400 mb-6">
               Compare multiple LLMs with a unified API interface
             </p>
             <div className="flex flex-wrap gap-2 justify-center">
               {['Next.js', 'TypeScript', 'AWS Lambda', 'LiteLLM', 'TailwindCSS'].map((tech) => (
-                <span key={tech} className="px-3 py-1 text-sm bg-white/10 backdrop-blur-md text-white rounded-full border border-white/20">
+                <span key={tech} className="px-3 py-1 text-xs bg-purple-900/20 backdrop-blur-sm text-purple-300 rounded-full border border-purple-700/30">
                   {tech}
                 </span>
               ))}
@@ -256,24 +270,24 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative">
         {/* Input Card */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-8 border border-white/20">
+        <div className="bg-[#1a1625]/60 backdrop-blur-xl rounded-2xl p-6 mb-8 border border-purple-900/30 shadow-2xl">
           <form onSubmit={handleSubmit}>
-            <label className="block text-sm font-medium text-purple-200 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Enter your prompt
             </label>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Ask anything to compare model responses..."
-              className="w-full px-4 py-3 bg-white/10 backdrop-blur-md text-white placeholder-purple-300 rounded-lg border border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              className="w-full px-4 py-3 bg-[#0c0a14]/60 backdrop-blur text-gray-100 placeholder-gray-500 rounded-lg border border-purple-800/30 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none transition-all"
               rows={4}
             />
             
             {/* Example Prompts */}
             <div className="mt-4">
-              <span className="text-sm text-purple-200">Try an example:</span>
+              <span className="text-sm text-gray-400">Try an example:</span>
               <div className="flex flex-wrap gap-2 mt-2">
                 {examplePrompts.map((example, i) => {
                   const isSpecial = example.includes("Vikas");
@@ -285,20 +299,20 @@ export default function Home() {
                       onClick={() => setPrompt(example)}
                       className={
                         isSpecial 
-                          ? "relative px-4 py-2 text-sm font-medium bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-white rounded-lg transition-all transform hover:scale-105 shadow-lg animate-pulse-glow"
-                          : "px-3 py-1.5 text-sm bg-purple-800/50 hover:bg-purple-700/50 text-white rounded-lg transition-colors hover:text-white"
+                          ? "relative px-4 py-2 text-sm font-medium bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white rounded-lg transition-all transform hover:scale-105 shadow-lg"
+                          : "px-3 py-1.5 text-sm bg-[#1a1625]/60 hover:bg-purple-800/30 text-gray-300 hover:text-white rounded-lg border border-purple-800/30 transition-all"
                       }
                       style={isSpecial ? {
                         animation: 'pulse-glow 2s ease-in-out infinite',
-                        boxShadow: '0 0 20px rgba(251, 191, 36, 0.5), 0 0 40px rgba(251, 191, 36, 0.3)'
+                        boxShadow: '0 0 30px rgba(251, 191, 36, 0.4)'
                       } : {}}
                     >
                       {isSpecial && (
                         <>
                           <span className="absolute -top-1 -right-1">
                             <span className="relative flex h-3 w-3">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
                             </span>
                           </span>
                           <Sparkles className="inline-block w-3 h-3 mr-1" />
@@ -314,7 +328,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={loading || !prompt.trim()}
-              className="mt-6 w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
+              className="mt-6 w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25"
             >
               {loading ? (
                 <>
@@ -331,17 +345,17 @@ export default function Home() {
           </form>
         </div>
 
-        {/* Loading State - only show if actually loading */}
+        {/* Loading State */}
         {loading && Object.keys(responses).length === 0 && (
           <div className="grid md:grid-cols-3 gap-4 mb-8">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+              <div key={i} className="bg-[#1a1625]/60 backdrop-blur-xl rounded-xl p-6 border border-purple-900/30">
                 <div className="animate-pulse">
-                  <div className="h-4 bg-white/20 rounded w-3/4 mb-4"></div>
+                  <div className="h-4 bg-purple-900/30 rounded w-3/4 mb-4"></div>
                   <div className="space-y-2">
-                    <div className="h-3 bg-white/20 rounded"></div>
-                    <div className="h-3 bg-white/20 rounded w-5/6"></div>
-                    <div className="h-3 bg-white/20 rounded w-4/6"></div>
+                    <div className="h-3 bg-purple-900/30 rounded"></div>
+                    <div className="h-3 bg-purple-900/30 rounded w-5/6"></div>
+                    <div className="h-3 bg-purple-900/30 rounded w-4/6"></div>
                   </div>
                 </div>
               </div>
@@ -349,7 +363,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Performance Chart - Shows immediately */}
+        {/* Performance Chart - ORIGINAL STYLING */}
         {chartData.length > 0 && (
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-8 border border-white/20">
             <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
@@ -382,9 +396,11 @@ export default function Home() {
               return (
                 <div
                   key={model}
-                  className={`bg-white/10 backdrop-blur-md rounded-xl p-6 border ${
-                    model === fastestModel ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white/20'
-                  } transition-all hover:bg-white/15`}
+                  className={`bg-[#1a1625]/60 backdrop-blur-xl rounded-xl p-6 border transition-all hover:shadow-lg hover:shadow-purple-500/10 ${
+                    model === fastestModel 
+                      ? 'border-purple-500 shadow-lg shadow-purple-500/20' 
+                      : 'border-purple-900/30'
+                  }`}
                 >
                   {/* Card Header */}
                   <div className="flex items-start justify-between mb-4">
@@ -398,7 +414,7 @@ export default function Home() {
                         )}
                       </h3>
                       {model === fastestModel && !isStreaming && (
-                        <span className="inline-flex items-center gap-1 text-xs text-yellow-400 mt-1">
+                        <span className="inline-flex items-center gap-1 text-xs text-purple-400 mt-1">
                           <Trophy className="h-3 w-3" />
                           Fastest Response
                         </span>
@@ -407,34 +423,34 @@ export default function Home() {
                     {contentToDisplay && !isStreaming && (
                       <button
                         onClick={() => copyResponse(model, contentToDisplay)}
-                        className="p-2 hover:bg-white/10 rounded-lg transition-colors group"
+                        className="p-2 hover:bg-purple-800/20 rounded-lg transition-colors group"
                         title="Copy response"
                       >
                         {copied === model ? (
                           <Check className="h-4 w-4 text-green-400" />
                         ) : (
-                          <Copy className="h-4 w-4 text-purple-300 group-hover:text-white" />
+                          <Copy className="h-4 w-4 text-gray-400 group-hover:text-purple-400" />
                         )}
                       </button>
                     )}
                   </div>
 
-                  {/* Metrics - Always show, even during streaming */}
+                  {/* Metrics */}
                   <div className="flex flex-wrap gap-2 mb-4">
                     {result.latency && (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-md">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/10 text-blue-400 text-xs rounded-md border border-blue-500/20">
                         <Clock className="h-3 w-3" />
                         {result.latency}s
                       </span>
                     )}
                     {result.tokens && (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-md">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/10 text-green-400 text-xs rounded-md border border-green-500/20">
                         <Coins className="h-3 w-3" />
                         {result.tokens} tokens
                       </span>
                     )}
                     {result.model_used && (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-md">
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/10 text-purple-400 text-xs rounded-md border border-purple-500/20">
                         <GitBranch className="h-3 w-3" />
                         via {result.model_used}
                       </span>
@@ -442,7 +458,7 @@ export default function Home() {
                   </div>
 
                   {/* Response Content */}
-                  <div className="text-sm text-purple-100 leading-relaxed">
+                  <div className="text-sm text-gray-300 leading-relaxed">
                     {result.error ? (
                       <p className="text-red-400">Error: {result.error}</p>
                     ) : (
@@ -462,14 +478,14 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-16 py-8 text-center text-purple-200">
+      <footer className="mt-16 py-8 text-center text-gray-500">
         <p className="mb-2">Built to showcase LiteLLMs unified API capabilities</p>
         <div className="flex items-center justify-center gap-4 text-sm">
-          <a href="https://github.com/vikas-vallabhaneni/hireme-litellm" className="hover:text-white transition-colors">
+          <a href="https://github.com/vikas-vallabhaneni/hireme-litellm" className="hover:text-purple-400 transition-colors">
             View on GitHub
           </a>
           <span>•</span>
-          <a href="https://docs.litellm.ai" className="hover:text-white transition-colors">
+          <a href="https://docs.litellm.ai" className="hover:text-purple-400 transition-colors">
             LiteLLM Docs
           </a>
         </div>
