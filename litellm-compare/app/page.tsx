@@ -37,6 +37,7 @@ export default function Home() {
 
     setLoading(true);
     setResponses({});
+    setCopied(null); // Reset copied state
     
     try {
       const { data } = await axios.post(LAMBDA_URL, { prompt });
@@ -60,10 +61,30 @@ export default function Home() {
     }
   };
 
-  const copyResponse = (model: string, text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(model);
-    setTimeout(() => setCopied(null), 2000);
+  const copyResponse = async (model: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(model);
+      setTimeout(() => setCopied(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopied(model);
+        setTimeout(() => setCopied(null), 2000);
+      } catch (err) {
+        console.error('Fallback copy failed:', err);
+      }
+      document.body.removeChild(textArea);
+    }
   };
 
   const getFastestModel = () => {
@@ -75,15 +96,71 @@ export default function Home() {
     , {model: '', latency: Infinity}).model;
   };
 
+  // Helper function to render formatted text
+  const renderFormattedContent = (content: string) => {
+    // Check if content looks like a numbered or bulleted list
+    const lines = content.split('\n');
+    const isList = lines.some(line => 
+      /^[\d]+\./.test(line.trim()) || // Numbered list
+      /^[-*•]/.test(line.trim()) ||    // Bullet points
+      /^\s*[-*•]/.test(line)            // Indented bullet points
+    );
+
+    if (isList) {
+      return (
+        <div className="space-y-1">
+          {lines.map((line, index) => {
+            // Skip empty lines
+            if (!line.trim()) return null;
+            
+            // Check if it's a list item
+            const isListItem = /^[\d]+\./.test(line.trim()) || /^[-*•]/.test(line.trim()) || /^\s*[-*•]/.test(line);
+            
+            if (isListItem) {
+              // Clean up the line (remove extra spaces but keep indentation for nested items)
+              const cleanedLine = line.replace(/^(\s*)[-*•]\s*/, '$1• ').replace(/^(\s*)(\d+\.)\s*/, '$1$2 ');
+              return (
+                <div key={index} className="pl-2">
+                  {cleanedLine}
+                </div>
+              );
+            }
+            
+            // Regular text line
+            return <div key={index}>{line}</div>;
+          })}
+        </div>
+      );
+    }
+    
+    // For regular text with line breaks, use whitespace-pre-wrap
+    return (
+      <p className="whitespace-pre-wrap">{content}</p>
+    );
+  };
+
   const examplePrompts = [
-    "Explain serverless computing in one sentence",
-    "Write a haiku about AWS Lambda",
-    "What are the benefits of using LiteLLM?",
-    "Compare Python and JavaScript for backend"
+    "What is an LLM Gateway?",
+    "Write a haiku about AI.",
+    "Why is Vikas the best candidate for the job?",
+    "What is the difference between httpx and aiohttp?"
   ];
 
   const barColors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
   const fastestModel = getFastestModel();
+
+  // Custom tooltip with better styling
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: { model: string; latency: number } }[] }) => {
+    if (active && payload && payload[0]) {
+      return (
+        <div className="bg-gray-900 text-white p-3 rounded-lg shadow-lg border border-white/20">
+          <p className="font-semibold">{payload[0].payload.model}</p>
+          <p className="text-sm">Latency: {payload[0].payload.latency}s</p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
@@ -127,20 +204,43 @@ export default function Home() {
               rows={4}
             />
             
-            {/* Example Prompts */}
+            {/* Example Prompts - Updated with special styling */}
             <div className="mt-4">
               <span className="text-sm text-purple-200">Try an example:</span>
               <div className="flex flex-wrap gap-2 mt-2">
-                {examplePrompts.map((example, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setPrompt(example)}
-                    className="px-3 py-1.5 text-sm bg-purple-800/50 hover:bg-purple-700/50 text-white rounded-lg transition-colors"
-                  >
-                    {example}
-                  </button>
-                ))}
+                {examplePrompts.map((example, i) => {
+                  const isSpecial = example.includes("Vikas");
+                  
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setPrompt(example)}
+                      className={
+                        isSpecial 
+                          ? "relative px-4 py-2 text-sm font-medium bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-white rounded-lg transition-all transform hover:scale-105 shadow-lg animate-pulse-glow"
+                          : "px-3 py-1.5 text-sm bg-purple-800/50 hover:bg-purple-700/50 text-white rounded-lg transition-colors hover:text-white"
+                      }
+                      style={isSpecial ? {
+                        animation: 'pulse-glow 2s ease-in-out infinite',
+                        boxShadow: '0 0 20px rgba(251, 191, 36, 0.5), 0 0 40px rgba(251, 191, 36, 0.3)'
+                      } : {}}
+                    >
+                      {isSpecial && (
+                        <>
+                          <span className="absolute -top-1 -right-1">
+                            <span className="relative flex h-3 w-3">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                            </span>
+                          </span>
+                          <Sparkles className="inline-block w-3 h-3 mr-1" />
+                        </>
+                      )}
+                      {example}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -194,13 +294,7 @@ export default function Home() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                 <XAxis dataKey="model" stroke="#fff" />
                 <YAxis stroke="#fff" />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: 'rgba(0,0,0,0.8)', 
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: '8px'
-                  }}
-                />
+                <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="latency" name="Latency (s)" radius={[8, 8, 0, 0]}>
                   {chartData.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={barColors[index % barColors.length]} />
@@ -232,17 +326,19 @@ export default function Home() {
                       </span>
                     )}
                   </div>
-                  <button
-                    onClick={() => result.content && copyResponse(model, result.content)}
-                    className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                    disabled={!result.content}
-                  >
-                    {copied === model ? (
-                      <Check className="h-4 w-4 text-green-400" />
-                    ) : (
-                      <Copy className="h-4 w-4 text-purple-300" />
-                    )}
-                  </button>
+                  {result.content && (
+                    <button
+                      onClick={() => copyResponse(model, result.content!)}
+                      className="p-2 hover:bg-white/10 rounded-lg transition-colors group"
+                      title="Copy response"
+                    >
+                      {copied === model ? (
+                        <Check className="h-4 w-4 text-green-400" />
+                      ) : (
+                        <Copy className="h-4 w-4 text-purple-300 group-hover:text-white" />
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* Metrics */}
@@ -267,12 +363,12 @@ export default function Home() {
                   )}
                 </div>
 
-                {/* Response Content */}
+                {/* Response Content - Updated to handle formatting */}
                 <div className="text-sm text-purple-100 leading-relaxed">
                   {result.error ? (
                     <p className="text-red-400">Error: {result.error}</p>
                   ) : (
-                    <p>{result.content}</p>
+                    result.content && renderFormattedContent(result.content)
                   )}
                 </div>
               </div>
@@ -285,7 +381,7 @@ export default function Home() {
       <footer className="mt-16 py-8 text-center text-purple-200">
         <p className="mb-2">Built to showcase LiteLLMs unified API capabilities</p>
         <div className="flex items-center justify-center gap-4 text-sm">
-          <a href="https://github.com/yourusername/litellm-compare" className="hover:text-white transition-colors">
+          <a href="https://github.com/vikas-vallabhaneni/hireme-litellm" className="hover:text-white transition-colors">
             View on GitHub
           </a>
           <span>•</span>
