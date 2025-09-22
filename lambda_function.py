@@ -2,10 +2,15 @@
 import json
 from litellm import completion # pyright: ignore[reportMissingImports]
 import time
+import os
 
 def lambda_handler(event, context):
-    body = json.loads(event['body'])
-    prompt = body['prompt']
+    # Handle both direct invocation and Function URL
+    if isinstance(event.get('body'), str):
+        body = json.loads(event['body'])
+    else:
+        body = event
+    prompt = body.get('prompt', 'Hello, world!')
     
     responses = {}
     
@@ -16,27 +21,35 @@ def lambda_handler(event, context):
     ]
     
     for model in models:
+        # Skip models without API keys
+        if "gpt" in model and not os.getenv('OPENAI_API_KEY'):
+            continue
+        if "claude" in model and not os.getenv('ANTHROPIC_API_KEY'):
+            continue
+        if "groq" in model and not os.getenv('GROQ_API_KEY'):
+            continue
+            
         start = time.time()
         try:
             response = completion(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=500
+                max_tokens=200,
+                timeout=20
             )
             responses[model] = {
                 "content": response.choices[0].message.content,
                 "latency": round(time.time() - start, 2),
-                "tokens": response.usage.total_tokens,
-                "cost": response._hidden_params.get('response_cost', 0)
+                "tokens": response.usage.total_tokens if response.usage else 0,
+                "model_used": response.model
             }
         except Exception as e:
-            responses[model] = {"error": str(e)}
+            responses[model] = {
+                "error": str(e),
+                "latency": round(time.time() - start, 2)
+            }
     
     return {
         'statusCode': 200,
-        'headers': {
-            'Access-Control-Allow-Origin': '*',
-            'Content-Type': 'application/json'
-        },
         'body': json.dumps(responses)
     }
