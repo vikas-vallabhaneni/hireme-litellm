@@ -46,7 +46,19 @@ export default function Home() {
     try {
       const { data } = await axios.post(LAMBDA_URL, { prompt });
       
-      // Process responses with streaming animation
+      // Immediately prepare and show chart data
+      const chart: ChartData[] = Object.entries(data)
+        .filter(([_, result]) => !(result as ModelResponse).error)
+        .map(([model, result]) => ({
+          model: model.split('/').pop()?.split('-')[0] || model,
+          latency: (result as ModelResponse).latency || 0,
+          tokens: (result as ModelResponse).tokens || 0,
+          cost: ((result as ModelResponse).cost || 0) * 1000
+        }));
+      setChartData(chart);
+      setLoading(false); // Stop loading immediately after getting data
+      
+      // Process responses with streaming animation (independently)
       Object.entries(data as Record<string, ModelResponse>).forEach(([model, result]) => {
         if (result.chunks && result.chunks.length > 0) {
           // Animate streaming for models with chunks
@@ -60,20 +72,6 @@ export default function Home() {
         }
       });
       
-      // Prepare chart data after all responses
-      setTimeout(() => {
-        const chart: ChartData[] = Object.entries(data)
-          .filter(([_, result]) => !(result as ModelResponse).error)
-          .map(([model, result]) => ({
-            model: model.split('/').pop()?.split('-')[0] || model,
-            latency: (result as ModelResponse).latency || 0,
-            tokens: (result as ModelResponse).tokens || 0,
-            cost: ((result as ModelResponse).cost || 0) * 1000
-          }));
-        setChartData(chart);
-        setLoading(false);
-      }, 2000);
-      
     } catch (error) {
       console.error('Error:', error);
       alert('Error connecting to API. Please check console.');
@@ -86,13 +84,17 @@ export default function Home() {
     
     setStreamingModels(prev => new Set(prev).add(model));
     
-    // Initialize with empty content
+    // Initialize with empty content but include metrics immediately
     setResponses(prev => ({
       ...prev,
       [model]: {
         ...result,
         displayContent: '',
-        streaming: true
+        streaming: true,
+        // Keep all metrics available immediately
+        latency: result.latency,
+        tokens: result.tokens,
+        cost: result.cost
       }
     }));
     
@@ -108,7 +110,7 @@ export default function Home() {
         setResponses(prev => ({
           ...prev,
           [model]: {
-            ...result,
+            ...prev[model],
             displayContent: currentText,
             streaming: true
           }
@@ -120,7 +122,7 @@ export default function Home() {
         setResponses(prev => ({
           ...prev,
           [model]: {
-            ...result,
+            ...prev[model],
             content: result.content,
             displayContent: result.content,
             streaming: false
@@ -317,7 +319,7 @@ export default function Home() {
               {loading ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Streaming Responses...
+                  Querying Models...
                 </>
               ) : (
                 <>
@@ -329,8 +331,8 @@ export default function Home() {
           </form>
         </div>
 
-        {/* Loading/Streaming State */}
-        {(loading || streamingModels.size > 0) && Object.keys(responses).length === 0 && (
+        {/* Loading State - only show if actually loading */}
+        {loading && Object.keys(responses).length === 0 && (
           <div className="grid md:grid-cols-3 gap-4 mb-8">
             {[1, 2, 3].map((i) => (
               <div key={i} className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
@@ -347,7 +349,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Performance Chart */}
+        {/* Performance Chart - Shows immediately */}
         {chartData.length > 0 && (
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 mb-8 border border-white/20">
             <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
@@ -417,29 +419,27 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* Metrics */}
-                  {!isStreaming && (
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {result.latency && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-md">
-                          <Clock className="h-3 w-3" />
-                          {result.latency}s
-                        </span>
-                      )}
-                      {result.tokens && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-md">
-                          <Coins className="h-3 w-3" />
-                          {result.tokens} tokens
-                        </span>
-                      )}
-                      {result.model_used && (
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-md">
-                          <GitBranch className="h-3 w-3" />
-                          via {result.model_used}
-                        </span>
-                      )}
-                    </div>
-                  )}
+                  {/* Metrics - Always show, even during streaming */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {result.latency && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-md">
+                        <Clock className="h-3 w-3" />
+                        {result.latency}s
+                      </span>
+                    )}
+                    {result.tokens && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-md">
+                        <Coins className="h-3 w-3" />
+                        {result.tokens} tokens
+                      </span>
+                    )}
+                    {result.model_used && (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-md">
+                        <GitBranch className="h-3 w-3" />
+                        via {result.model_used}
+                      </span>
+                    )}
+                  </div>
 
                   {/* Response Content */}
                   <div className="text-sm text-purple-100 leading-relaxed">
