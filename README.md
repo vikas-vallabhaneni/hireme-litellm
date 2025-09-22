@@ -1,5 +1,15 @@
 # hireme-litellm
 
+## TODO:
+
+- Create the YT video
+
+- Add profile to website
+
+- Update README
+
+- implement streaming
+
 ## Update Lambda steps
 
 ```

@@ -1,20 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Send, Loader2, Zap, Clock, Coins, Trophy, Copy, Check, GitBranch, Sparkles } from 'lucide-react';
 
-// Replace with your Lambda Function URL
 const LAMBDA_URL = process.env.NEXT_PUBLIC_LAMBDA_URL || 'https://YOUR-FUNCTION-URL.lambda-url.us-east-1.on.aws/';
 
 interface ModelResponse {
   content?: string;
+  chunks?: string[];
   latency?: number;
   tokens?: number;
   cost?: number;
   error?: string;
   model_used?: string;
+  streaming?: boolean;
+  displayContent?: string;
 }
 
 interface ChartData {
@@ -30,6 +32,7 @@ export default function Home() {
   const [responses, setResponses] = useState<Record<string, ModelResponse>>({});
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
+  const [streamingModels, setStreamingModels] = useState<Set<string>>(new Set());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,28 +40,99 @@ export default function Home() {
 
     setLoading(true);
     setResponses({});
-    setCopied(null); // Reset copied state
+    setCopied(null);
+    setStreamingModels(new Set());
     
     try {
       const { data } = await axios.post(LAMBDA_URL, { prompt });
-      setResponses(data);
       
-      // Prepare chart data
-      const chart: ChartData[] = Object.entries(data)
-        .filter(([_, result]) => !(result as ModelResponse).error)
-        .map(([model, result]) => ({
-          model: model.split('/').pop()?.split('-')[0] || model,
-          latency: (result as ModelResponse).latency || 0,
-          tokens: (result as ModelResponse).tokens || 0,
-          cost: ((result as ModelResponse).cost || 0) * 1000
-        }));
-      setChartData(chart);
+      // Process responses with streaming animation
+      Object.entries(data as Record<string, ModelResponse>).forEach(([model, result]) => {
+        if (result.chunks && result.chunks.length > 0) {
+          // Animate streaming for models with chunks
+          animateStreaming(model, result);
+        } else {
+          // Set response immediately for non-chunked responses
+          setResponses(prev => ({
+            ...prev,
+            [model]: result as ModelResponse
+          }));
+        }
+      });
+      
+      // Prepare chart data after all responses
+      setTimeout(() => {
+        const chart: ChartData[] = Object.entries(data)
+          .filter(([_, result]) => !(result as ModelResponse).error)
+          .map(([model, result]) => ({
+            model: model.split('/').pop()?.split('-')[0] || model,
+            latency: (result as ModelResponse).latency || 0,
+            tokens: (result as ModelResponse).tokens || 0,
+            cost: ((result as ModelResponse).cost || 0) * 1000
+          }));
+        setChartData(chart);
+        setLoading(false);
+      }, 2000);
+      
     } catch (error) {
       console.error('Error:', error);
       alert('Error connecting to API. Please check console.');
-    } finally {
       setLoading(false);
     }
+  };
+
+  const animateStreaming = (model: string, result: ModelResponse) => {
+    if (!result.chunks) return;
+    
+    setStreamingModels(prev => new Set(prev).add(model));
+    
+    // Initialize with empty content
+    setResponses(prev => ({
+      ...prev,
+      [model]: {
+        ...result,
+        displayContent: '',
+        streaming: true
+      }
+    }));
+    
+    // Animate chunks appearing
+    let currentChunk = 0;
+    let currentText = '';
+    const chunks = result.chunks;
+    const chunkDelay = Math.min(50, 2000 / chunks.length); // Adjust speed based on chunk count
+    
+    const streamInterval = setInterval(() => {
+      if (currentChunk < chunks.length) {
+        currentText += chunks[currentChunk];
+        setResponses(prev => ({
+          ...prev,
+          [model]: {
+            ...result,
+            displayContent: currentText,
+            streaming: true
+          }
+        }));
+        currentChunk++;
+      } else {
+        // Streaming complete
+        clearInterval(streamInterval);
+        setResponses(prev => ({
+          ...prev,
+          [model]: {
+            ...result,
+            content: result.content,
+            displayContent: result.content,
+            streaming: false
+          }
+        }));
+        setStreamingModels(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(model);
+          return newSet;
+        });
+      }
+    }, chunkDelay);
   };
 
   const copyResponse = async (model: string, text: string) => {
@@ -68,7 +142,6 @@ export default function Home() {
       setTimeout(() => setCopied(null), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
-      // Fallback for older browsers
       const textArea = document.createElement('textarea');
       textArea.value = text;
       textArea.style.position = 'fixed';
@@ -96,28 +169,23 @@ export default function Home() {
     , {model: '', latency: Infinity}).model;
   };
 
-  // Helper function to render formatted text
   const renderFormattedContent = (content: string) => {
-    // Check if content looks like a numbered or bulleted list
     const lines = content.split('\n');
     const isList = lines.some(line => 
-      /^[\d]+\./.test(line.trim()) || // Numbered list
-      /^[-*•]/.test(line.trim()) ||    // Bullet points
-      /^\s*[-*•]/.test(line)            // Indented bullet points
+      /^[\d]+\./.test(line.trim()) || 
+      /^[-*•]/.test(line.trim()) ||
+      /^\s*[-*•]/.test(line)
     );
 
     if (isList) {
       return (
         <div className="space-y-1">
           {lines.map((line, index) => {
-            // Skip empty lines
             if (!line.trim()) return null;
             
-            // Check if it's a list item
             const isListItem = /^[\d]+\./.test(line.trim()) || /^[-*•]/.test(line.trim()) || /^\s*[-*•]/.test(line);
             
             if (isListItem) {
-              // Clean up the line (remove extra spaces but keep indentation for nested items)
               const cleanedLine = line.replace(/^(\s*)[-*•]\s*/, '$1• ').replace(/^(\s*)(\d+\.)\s*/, '$1$2 ');
               return (
                 <div key={index} className="pl-2">
@@ -126,14 +194,12 @@ export default function Home() {
               );
             }
             
-            // Regular text line
             return <div key={index}>{line}</div>;
           })}
         </div>
       );
     }
     
-    // For regular text with line breaks, use whitespace-pre-wrap
     return (
       <p className="whitespace-pre-wrap">{content}</p>
     );
@@ -149,7 +215,6 @@ export default function Home() {
   const barColors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
   const fastestModel = getFastestModel();
 
-  // Custom tooltip with better styling
   const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: { model: string; latency: number } }[] }) => {
     if (active && payload && payload[0]) {
       return (
@@ -204,7 +269,7 @@ export default function Home() {
               rows={4}
             />
             
-            {/* Example Prompts - Updated with special styling */}
+            {/* Example Prompts */}
             <div className="mt-4">
               <span className="text-sm text-purple-200">Try an example:</span>
               <div className="flex flex-wrap gap-2 mt-2">
@@ -252,7 +317,7 @@ export default function Home() {
               {loading ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Querying Models...
+                  Streaming Responses...
                 </>
               ) : (
                 <>
@@ -264,8 +329,8 @@ export default function Home() {
           </form>
         </div>
 
-        {/* Loading State */}
-        {loading && (
+        {/* Loading/Streaming State */}
+        {(loading || streamingModels.size > 0) && Object.keys(responses).length === 0 && (
           <div className="grid md:grid-cols-3 gap-4 mb-8">
             {[1, 2, 3].map((i) => (
               <div key={i} className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
@@ -308,71 +373,90 @@ export default function Home() {
         {/* Response Cards */}
         {Object.keys(responses).length > 0 && (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Object.entries(responses).map(([model, result]) => (
-              <div
-                key={model}
-                className={`bg-white/10 backdrop-blur-md rounded-xl p-6 border ${
-                  model === fastestModel ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white/20'
-                } transition-all hover:bg-white/15`}
-              >
-                {/* Card Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h3 className="font-semibold text-white text-lg">{model}</h3>
-                    {model === fastestModel && (
-                      <span className="inline-flex items-center gap-1 text-xs text-yellow-400 mt-1">
-                        <Trophy className="h-3 w-3" />
-                        Fastest Response
-                      </span>
+            {Object.entries(responses).map(([model, result]) => {
+              const isStreaming = streamingModels.has(model);
+              const contentToDisplay = result.displayContent || result.content || '';
+              
+              return (
+                <div
+                  key={model}
+                  className={`bg-white/10 backdrop-blur-md rounded-xl p-6 border ${
+                    model === fastestModel ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white/20'
+                  } transition-all hover:bg-white/15`}
+                >
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold text-white text-lg flex items-center gap-2">
+                        {model}
+                        {isStreaming && (
+                          <span className="inline-flex">
+                            <span className="animate-pulse text-green-400 text-xs">● Streaming</span>
+                          </span>
+                        )}
+                      </h3>
+                      {model === fastestModel && !isStreaming && (
+                        <span className="inline-flex items-center gap-1 text-xs text-yellow-400 mt-1">
+                          <Trophy className="h-3 w-3" />
+                          Fastest Response
+                        </span>
+                      )}
+                    </div>
+                    {contentToDisplay && !isStreaming && (
+                      <button
+                        onClick={() => copyResponse(model, contentToDisplay)}
+                        className="p-2 hover:bg-white/10 rounded-lg transition-colors group"
+                        title="Copy response"
+                      >
+                        {copied === model ? (
+                          <Check className="h-4 w-4 text-green-400" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-purple-300 group-hover:text-white" />
+                        )}
+                      </button>
                     )}
                   </div>
-                  {result.content && (
-                    <button
-                      onClick={() => copyResponse(model, result.content!)}
-                      className="p-2 hover:bg-white/10 rounded-lg transition-colors group"
-                      title="Copy response"
-                    >
-                      {copied === model ? (
-                        <Check className="h-4 w-4 text-green-400" />
-                      ) : (
-                        <Copy className="h-4 w-4 text-purple-300 group-hover:text-white" />
+
+                  {/* Metrics */}
+                  {!isStreaming && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {result.latency && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-md">
+                          <Clock className="h-3 w-3" />
+                          {result.latency}s
+                        </span>
                       )}
-                    </button>
+                      {result.tokens && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-md">
+                          <Coins className="h-3 w-3" />
+                          {result.tokens} tokens
+                        </span>
+                      )}
+                      {result.model_used && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-md">
+                          <GitBranch className="h-3 w-3" />
+                          via {result.model_used}
+                        </span>
+                      )}
+                    </div>
                   )}
-                </div>
 
-                {/* Metrics */}
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {result.latency && (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-md">
-                      <Clock className="h-3 w-3" />
-                      {result.latency}s
-                    </span>
-                  )}
-                  {result.tokens && (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-md">
-                      <Coins className="h-3 w-3" />
-                      {result.tokens} tokens
-                    </span>
-                  )}
-                  {result.model_used && (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded-md">
-                      <GitBranch className="h-3 w-3" />
-                      via {result.model_used}
-                    </span>
-                  )}
+                  {/* Response Content */}
+                  <div className="text-sm text-purple-100 leading-relaxed">
+                    {result.error ? (
+                      <p className="text-red-400">Error: {result.error}</p>
+                    ) : (
+                      <>
+                        {contentToDisplay && renderFormattedContent(contentToDisplay)}
+                        {isStreaming && (
+                          <span className="inline-block w-2 h-4 bg-purple-400 animate-pulse ml-1" />
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
-
-                {/* Response Content - Updated to handle formatting */}
-                <div className="text-sm text-purple-100 leading-relaxed">
-                  {result.error ? (
-                    <p className="text-red-400">Error: {result.error}</p>
-                  ) : (
-                    result.content && renderFormattedContent(result.content)
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

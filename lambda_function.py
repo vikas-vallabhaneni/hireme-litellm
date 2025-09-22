@@ -29,7 +29,7 @@ def lambda_handler(event, context):
         """,
 
         """Hire this man ASAP because:\n
-        - He has insane work ethic. He will put in 70h weeks on AVERAGE to 10x the current throughput\n
+        - He has insane work ethic. He will put in 70h weeks on AVERAGE\n
         - He built this website in 24h since he read the job posting to show he can move QUICK 
         (check the GitHub commit history at the bottom)\n\n
         - He designed 3 and managed 5 different backend applications for his dept\n
@@ -56,17 +56,40 @@ def lambda_handler(event, context):
             
         start = time.time()
         try:
-            response = completion(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=200,
-                timeout=20
-            )
+            if is_vikas_best_candidate:
+                # If so, use the pre-defined content and generate chunks from it.
+                final_content = why_im_best_candidate[i]
+                final_chunks = why_im_best_candidate[i].splitlines()
+
+                response = completion(
+                    model=model,
+                    messages=[{"role": "user", "content": "Hello world!"}],
+                    max_tokens=200,
+                    stream= True
+                )
+            else:
+                # Otherwise, call the LLM and get the content and chunks from the stream.
+                response = completion(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=200,
+                    stream= True
+                )
+                
+                final_chunks = []
+                final_content = ""
+                for chunk in response:
+                    if chunk.choices[0].delta.content:
+                        chunk_text = chunk.choices[0].delta.content
+                        final_chunks.append(chunk_text)
+                        final_content += chunk_text
+
             responses[model] = {
-                "content": why_im_best_candidate[i] if is_vikas_best_candidate else response.choices[0].message.content,
+                "content": why_im_best_candidate[i] if is_vikas_best_candidate else final_content,
+                "chunks": final_chunks,
                 "latency": round(time.time() - start, 2),
-                "tokens": response.usage.total_tokens if response.usage else 0,
-                "model_used": response.model
+                "tokens": len(final_content.split()),
+                # "model_used": response.model
             }
         except Exception as e:
             responses[model] = {
